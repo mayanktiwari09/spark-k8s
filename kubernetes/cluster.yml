@@ -5,7 +5,7 @@ metadata:
   namespace: k8s-bigdata
 data:
   YARN_CONF_yarn_log_server_url: https://historyserver:8188/applicationhistory/logs/
-  YARN_CONF_yarn_resourcemanager_hostname: $(RESOURCEMANAGER_SERVICE_HOST)
+  YARN_CONF_yarn_resourcemanager_hostname: resourcemanager
   YARN_CONF_yarn_resourcemanager_address: resourcemanager:8032
   YARN_CONF_yarn_resourcemanager_scheduler_address: resourcemanager:8030
   YARN_CONF_yarn_resourcemanager_resource__tracker_address: resourcemanager:8031
@@ -13,7 +13,7 @@ data:
   MAPRED_CONF_mapred_child_java_opts: "-Xmx4096m"
   MAPRED_CONF_mapreduce_jobhistory_address: historyserver:10020
   MAPRED_CONF_mapreduce_jobhistory_webapp_address: historyserver:19888
-  SPARK_NUM_CORES: "9"
+  SPARK_NUM_CORES: "8"
   SPARK_DRIVER_MEMORY: "2g"
   CORE_CONF_fs_defaultFS: "hdfs://namenode:9000"
   SPARK_MASTER: "spark://namenode:7077"
@@ -27,6 +27,7 @@ metadata:
 spec:
   selector:
     app: namenode
+  clusterIP: None
   externalName: namenode
   ports:
     - name: web-ui
@@ -59,6 +60,7 @@ metadata:
 spec:
     selector:
       app: resourcemanager
+    clusterIP: None
     externalName: resourcemanager
     ports:
       - name: yarn-web-ui
@@ -82,6 +84,7 @@ metadata:
 spec:
   selector:
     app: historyserver
+  clusterIP: None
   externalName: historyserver
   ports:
     - name: web-ui
@@ -102,6 +105,7 @@ metadata:
 spec:
   selector:
     app: datanode
+  clusterIP: None
   ports:
     - name: spark-worker-ui
       port: 8081
@@ -139,41 +143,15 @@ spec:
         claimName: namenode
   containers:
   - name: namenode
-    image: mayanktiwari09/hadoop-namenode:1.3
+    image: mayanktiwari09/hadoop-namenode:1.8
     imagePullPolicy: Always
     resources:
       limits:
-        memory: "16Gi"
-        cpu: "8"
-    env:
-    - name: YARN_CONF_yarn_log_server_url
-      value: https://$(HISTORYSERVER_SERVICE_HOST):8188/applicationhistory/logs/
-    - name: YARN_CONF_yarn_resourcemanager_address
-      value: $(RESOURCEMANAGER_SERVICE_HOST):8032
-    - name: YARN_CONF_yarn_resourcemanager_hostname
-      value: $(RESOURCEMANAGER_SERVICE_HOST)
-    - name: YARN_CONF_yarn_resourcemanager_scheduler_address
-      value: $(RESOURCEMANAGER_SERVICE_HOST):8030
-    - name: YARN_CONF_yarn_resourcemanager_resource__tracker_address
-      value: $(RESOURCEMANAGER_SERVICE_HOST):8031
-    - name: YARN_CONF_yarn_timeline___service_hostname
-      value: $(HISTORYSERVER_SERVICE_HOST)
-    - name: MAPRED_CONF_mapred_child_java_opts
-      value: "-Xmx4096m"
-    - name: MAPRED_CONF_mapreduce_jobhistory_address
-      value: $(HISTORYSERVER_SERVICE_HOST):10020
-    - name: MAPRED_CONF_mapreduce_jobhistory_webapp_address
-      value: $(HISTORYSERVER_SERVICE_HOST):19888
-    - name: SPARK_NUM_CORES
-      value: "9"
-    - name: SPARK_DRIVER_MEMORY
-      value: "2g"
-    - name: CORE_CONF_fs_defaultFS
-      value: hdfs://localhost:9000
-    - name: SPARK_MASTER
-      value: spark://localhost:7077
-    - name: HADOOP_URL
-      value: hdfs://localhost:9000
+        memory: "8Gi"
+        cpu: "6"
+    envFrom:
+    - configMapRef:
+        name: hadoop-env
     ports:
       - containerPort: 9870
       - containerPort: 9000
@@ -185,10 +163,6 @@ spec:
     volumeMounts:
       - name: vol
         mountPath: /hadoop/dfs/name
-  dnsConfig:
-    options:
-      - name: ndots
-        value: "0" 
 ---
 apiVersion: apps/v1
 kind: StatefulSet 
@@ -199,7 +173,7 @@ metadata:
     app: datanode
 spec:
   serviceName: "datanode"
-  replicas: 4
+  replicas: 5
   selector:
     matchLabels:
       app: datanode
@@ -213,41 +187,16 @@ spec:
           name: datanode
           resources:
             limits:
-              memory: "16Gi"
+              memory: "14Gi"
               cpu: "8"
           env:
           - name: SERVICE_PRECONDITION
-            value: "$(NAMENODE_SERVICE_HOST):50070 $(NAMENODE_SERVICE_HOST):9000 $(NAMENODE_SERVICE_HOST):8080"
+            value: "namenode:50070 namenode:9000 namenode:8080"
           - name: NUM_CORES
             value: "8"
-          - name: YARN_CONF_yarn_log_server_url
-            value: https://$(HISTORYSERVER_SERVICE_HOST):8188/applicationhistory/logs/
-          - name: YARN_CONF_yarn_resourcemanager_address
-            value: $(RESOURCEMANAGER_SERVICE_HOST):8032
-          - name: YARN_CONF_yarn_resourcemanager_hostname
-            value: $(RESOURCEMANAGER_SERVICE_HOST)
-          - name: YARN_CONF_yarn_resourcemanager_scheduler_address
-            value: $(RESOURCEMANAGER_SERVICE_HOST):8030
-          - name: YARN_CONF_yarn_resourcemanager_resource__tracker_address
-            value: $(RESOURCEMANAGER_SERVICE_HOST):8031
-          - name: YARN_CONF_yarn_timeline___service_hostname
-            value: $(HISTORYSERVER_SERVICE_HOST)
-          - name: MAPRED_CONF_mapred_child_java_opts
-            value: "-Xmx4096m"
-          - name: MAPRED_CONF_mapreduce_jobhistory_address
-            value: $(HISTORYSERVER_SERVICE_HOST):10020
-          - name: MAPRED_CONF_mapreduce_jobhistory_webapp_address
-            value: $(HISTORYSERVER_SERVICE_HOST):19888
-          - name: SPARK_NUM_CORES
-            value: "9"
-          - name: SPARK_DRIVER_MEMORY
-            value: "2g"
-          - name: CORE_CONF_fs_defaultFS
-            value: hdfs://$(NAMENODE_SERVICE_HOST):9000
-          - name: SPARK_MASTER
-            value: spark://$(NAMENODE_SERVICE_HOST):7077
-          - name: HADOOP_URL
-            value: hdfs://$(NAMENODE_SERVICE_HOST):9000
+          envFrom:
+          - configMapRef:
+              name: hadoop-env
           volumeMounts:
             - mountPath: /hadoop/dfs/data
               name: vol 
@@ -263,45 +212,16 @@ spec:
               cpu: "3"
           ports:
             - containerPort: 45454
-          env:      
-          - name: YARN_CONF_yarn_log_server_url
-            value: https://$(HISTORYSERVER_SERVICE_HOST):8188/applicationhistory/logs/
-          - name: YARN_CONF_yarn_resourcemanager_address
-            value: $(RESOURCEMANAGER_SERVICE_HOST):8032
-          - name: YARN_CONF_yarn_resourcemanager_hostname
-            value: $(RESOURCEMANAGER_SERVICE_HOST)
-          - name: YARN_CONF_yarn_resourcemanager_scheduler_address
-            value: $(RESOURCEMANAGER_SERVICE_HOST):8030
-          - name: YARN_CONF_yarn_resourcemanager_resource__tracker_address
-            value: $(RESOURCEMANAGER_SERVICE_HOST):8031
-          - name: YARN_CONF_yarn_timeline___service_hostname
-            value: $(HISTORYSERVER_SERVICE_HOST)
-          - name: MAPRED_CONF_mapred_child_java_opts
-            value: "-Xmx4096m"
-          - name: MAPRED_CONF_mapreduce_jobhistory_address
-            value: $(HISTORYSERVER_SERVICE_HOST):10020
-          - name: MAPRED_CONF_mapreduce_jobhistory_webapp_address
-            value: $(HISTORYSERVER_SERVICE_HOST):19888
-          - name: SPARK_NUM_CORES
-            value: "9"
-          - name: SPARK_DRIVER_MEMORY
-            value: "2g"
-          - name: CORE_CONF_fs_defaultFS
-            value: hdfs://$(NAMENODE_SERVICE_HOST):9000
-          - name: SPARK_MASTER
-            value: spark://$(NAMENODE_SERVICE_HOST):7077
-          - name: HADOOP_URL
-            value: hdfs://$(NAMENODE_SERVICE_HOST):9000
+          env:
           - name: POD_NAME
             valueFrom:
               fieldRef:
                 fieldPath: metadata.name
           - name: SERVICE_PRECONDITION
-            value: "$(NAMENODE_SERVICE_HOST):50070 $(NAMENODE_SERVICE_HOST):9000 $(RESOURCEMANAGER_SERVICE_HOST):8088 $(POD_NAME):50020"
-      dnsConfig:
-        options:
-          - name: ndots
-            value: "0"
+            value: "namenode:50070 namenode:9000 resourcemanager:8088 $(POD_NAME):50020"
+          envFrom:
+          - configMapRef:
+              name: hadoop-env
       volumes:
         - name: vol
   volumeClaimTemplates:
@@ -312,7 +232,7 @@ spec:
       storageClassName: "rook-ceph-block"
       resources:
         requests:
-          storage: 60Gi 
+          storage: 30Gi          
 ---
 apiVersion: v1
 kind: Pod
@@ -327,39 +247,14 @@ spec:
       name: resourcemanager
       resources:
             limits:
-              memory: "8Gi"
+              memory: "6Gi"
               cpu: "3"
       env:
       - name: SERVICE_PRECONDITION
-        value: "$(NAMENODE_SERVICE_HOST):50070 $(NAMENODE_SERVICE_HOST):9000 $(DATANODE_SERVICE_HOST):8081"
-      - name: YARN_CONF_yarn_log_server_url
-        value: https://$(HISTORYSERVER_SERVICE_HOST):8188/applicationhistory/logs/
-      - name: YARN_CONF_yarn_resourcemanager_address
-        value: $(RESOURCEMANAGER_SERVICE_HOST):8032
-      - name: YARN_CONF_yarn_resourcemanager_hostname
-        value: $(RESOURCEMANAGER_SERVICE_HOST)
-      - name: YARN_CONF_yarn_resourcemanager_scheduler_address
-        value: $(RESOURCEMANAGER_SERVICE_HOST):8030
-      - name: YARN_CONF_yarn_resourcemanager_resource__tracker_address
-        value: $(RESOURCEMANAGER_SERVICE_HOST):8031
-      - name: YARN_CONF_yarn_timeline___service_hostname
-        value: $(HISTORYSERVER_SERVICE_HOST)
-      - name: MAPRED_CONF_mapred_child_java_opts
-        value: "-Xmx4096m"
-      - name: MAPRED_CONF_mapreduce_jobhistory_address
-        value: $(HISTORYSERVER_SERVICE_HOST):10020
-      - name: MAPRED_CONF_mapreduce_jobhistory_webapp_address
-        value: $(HISTORYSERVER_SERVICE_HOST):19888
-      - name: SPARK_NUM_CORES
-        value: "9"
-      - name: SPARK_DRIVER_MEMORY
-        value: "2g"
-      - name: CORE_CONF_fs_defaultFS
-        value: hdfs://$(NAMENODE_SERVICE_HOST):9000
-      - name: SPARK_MASTER
-        value: spark://$(NAMENODE_SERVICE_HOST):7077
-      - name: HADOOP_URL
-        value: hdfs://$(NAMENODE_SERVICE_HOST):9000
+        value: "namenode:50070 namenode:9000 datanode:8081"
+      envFrom:
+      - configMapRef:
+          name: hadoop-env
       ports:
         - containerPort: 8088
         - containerPort: 8031
@@ -373,10 +268,6 @@ spec:
           - datanode:8081
         initialDelaySeconds: 2
         periodSeconds: 3
-  dnsConfig:
-    options:
-      - name: ndots
-        value: "0" 
 ---
 apiVersion: v1
 kind: Pod
@@ -391,39 +282,14 @@ spec:
       name: historyserver
       resources:
             limits:
-              memory: "8Gi"
+              memory: "6Gi"
               cpu: "3"
       env:
       - name: SERVICE_PRECONDITION
-        value: "$(NAMENODE_SERVICE_HOST):50070 $(NAMENODE_SERVICE_HOST):9000 $(DATANODE_SERVICE_HOST):8081"
-      - name: YARN_CONF_yarn_log_server_url
-        value: https://$(HISTORYSERVER_SERVICE_HOST):8188/applicationhistory/logs/
-      - name: YARN_CONF_yarn_resourcemanager_address
-        value: $(RESOURCEMANAGER_SERVICE_HOST):8032
-      - name: YARN_CONF_yarn_resourcemanager_hostname
-        value: $(RESOURCEMANAGER_SERVICE_HOST)
-      - name: YARN_CONF_yarn_resourcemanager_scheduler_address
-        value: $(RESOURCEMANAGER_SERVICE_HOST):8030
-      - name: YARN_CONF_yarn_resourcemanager_resource__tracker_address
-        value: $(RESOURCEMANAGER_SERVICE_HOST):8031
-      - name: YARN_CONF_yarn_timeline___service_hostname
-        value: $(HISTORYSERVER_SERVICE_HOST)
-      - name: MAPRED_CONF_mapred_child_java_opts
-        value: "-Xmx4096m"
-      - name: MAPRED_CONF_mapreduce_jobhistory_address
-        value: $(HISTORYSERVER_SERVICE_HOST):10020
-      - name: MAPRED_CONF_mapreduce_jobhistory_webapp_address
-        value: $(HISTORYSERVER_SERVICE_HOST):19888
-      - name: SPARK_NUM_CORES
-        value: "9"
-      - name: SPARK_DRIVER_MEMORY
-        value: "2g"
-      - name: CORE_CONF_fs_defaultFS
-        value: hdfs://$(NAMENODE_SERVICE_HOST):9000
-      - name: SPARK_MASTER
-        value: spark://$(NAMENODE_SERVICE_HOST):7077
-      - name: HADOOP_URL
-        value: hdfs://$(NAMENODE_SERVICE_HOST):9000
+        value: "namenode:9000 namenode:50070 datanode:8081"
+      envFrom:
+      - configMapRef:
+          name: hadoop-env
       ports:
         - containerPort: 8188
         - containerPort: 19888
@@ -431,9 +297,5 @@ spec:
       volumeMounts:
         - name: historyserver
           mountPath: /hadoop/yarn/timeline
-  dnsConfig:
-    options:
-      - name: ndots
-        value: "0"
   volumes:
     - name: historyserver

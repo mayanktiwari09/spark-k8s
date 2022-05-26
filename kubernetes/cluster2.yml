@@ -13,7 +13,7 @@ data:
   MAPRED_CONF_mapred_child_java_opts: "-Xmx4096m"
   MAPRED_CONF_mapreduce_jobhistory_address: historyserver:10020
   MAPRED_CONF_mapreduce_jobhistory_webapp_address: historyserver:19888
-  SPARK_NUM_CORES: "9"
+  SPARK_NUM_CORES: "14"
   SPARK_DRIVER_MEMORY: "2g"
   CORE_CONF_fs_defaultFS: "hdfs://namenode:9000"
   SPARK_MASTER: "spark://namenode:7077"
@@ -115,6 +115,21 @@ spec:
       targetPort: 9864
 ---
 apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: namenode
+  namespace: k8s-bigdata
+  labels:
+    app: spark
+spec:
+  storageClassName: rook-ceph-block
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
 kind: Pod
 metadata:
   name: namenode
@@ -124,14 +139,16 @@ metadata:
 spec:
   volumes:
     - name: vol
+      persistentVolumeClaim:
+        claimName: namenode
   containers:
   - name: namenode
-    image: mayanktiwari09/hadoop-namenode:0.9
+    image: mayanktiwari09/hadoop-namenode:1.6
     imagePullPolicy: Always
     resources:
       limits:
-        memory: "16Gi"
-        cpu: "8"
+        memory: "10Gi"
+        cpu: "6"
     envFrom:
     - configMapRef:
         name: hadoop-env
@@ -156,7 +173,7 @@ metadata:
     app: datanode
 spec:
   serviceName: "datanode"
-  replicas: 4
+  replicas: 5
   selector:
     matchLabels:
       app: datanode
@@ -170,13 +187,13 @@ spec:
           name: datanode
           resources:
             limits:
-              memory: "16Gi"
-              cpu: "8"
+              memory: "20Gi"
+              cpu: "14"
           env:
           - name: SERVICE_PRECONDITION
             value: "namenode:50070 namenode:9000 namenode:8080"
           - name: NUM_CORES
-            value: "8"
+            value: "14"
           envFrom:
           - configMapRef:
               name: hadoop-env
@@ -207,6 +224,15 @@ spec:
               name: hadoop-env
       volumes:
         - name: vol
+  volumeClaimTemplates:
+  - metadata:
+      name: vol
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "rook-ceph-block"
+      resources:
+        requests:
+          storage: 30Gi          
 ---
 apiVersion: v1
 kind: Pod
@@ -221,7 +247,7 @@ spec:
       name: resourcemanager
       resources:
             limits:
-              memory: "8Gi"
+              memory: "6Gi"
               cpu: "3"
       env:
       - name: SERVICE_PRECONDITION
@@ -256,7 +282,7 @@ spec:
       name: historyserver
       resources:
             limits:
-              memory: "8Gi"
+              memory: "6Gi"
               cpu: "3"
       env:
       - name: SERVICE_PRECONDITION
